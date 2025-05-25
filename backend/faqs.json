@@ -1,0 +1,15 @@
+
+[
+  {
+    "pregunta": "¿Cómo ingreso al campus virtual?",
+    "respuesta": "Para ingresar al campus virtual, ve a https://campus.tuuniversidad.edu e inicia sesión con tu correo institucional."
+  },
+  {
+    "pregunta": "¿Qué hago si olvidé mi contraseña del correo institucional?",
+    "respuesta": "Puedes restablecerla desde https://correo.tuuniversidad.edu/restablecer o contacta con soporte."
+  },
+  {
+    "pregunta": "¿Cómo conectarme al Wi-Fi de la universidad?",
+    "respuesta": "Conéctate a la red 'Uni-WiFi' usando tu cuenta institucional. Si no funciona, prueba reiniciar tu dispositivo o acude al centro de ayuda."
+  }
+]
