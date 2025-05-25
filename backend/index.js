@@ -10,16 +10,14 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Inicializar OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Leer FAQs desde archivo
+// Cargar FAQs
 let faqs = [];
 try {
   const data = fs.readFileSync('./faqs.json', 'utf8');
@@ -28,48 +26,51 @@ try {
   console.error('Error al leer faqs.json:', err);
 }
 
-// Endpoint raíz
 app.get('/', (req, res) => {
   res.send('🧠 AtenasBot backend está en línea');
 });
 
-// Endpoint para obtener las FAQs
 app.get('/faqs', (req, res) => {
   res.json(faqs);
 });
 
-// Endpoint principal para recibir preguntas del usuario
 app.post('/api/chat', async (req, res) => {
-  const { question } = req.body;
-  if (!question) return res.status(400).json({ error: 'Pregunta no recibida' });
+  const { message, history = [] } = req.body;
+  if (!message) return res.status(400).json({ error: 'Mensaje no recibido' });
 
-  // Intentar responder desde las FAQs
   const questions = faqs.map((faq) => faq.pregunta);
-  const matches = stringSimilarity.findBestMatch(question, questions);
+  const matches = stringSimilarity.findBestMatch(message, questions);
   const bestMatch = matches.bestMatch;
 
-  // Si la coincidencia es buena, respondemos con la FAQ
   if (bestMatch.rating > 0.6) {
     const respuesta = faqs.find((faq) => faq.pregunta === bestMatch.target)?.respuesta;
-    return res.json({ answer: respuesta, source: 'faq' });
+    return res.json({ reply: respuesta, source: 'faq', history: [...history, { user: message, bot: respuesta }] });
   }
 
-  // Si no, preguntar a OpenAI
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: question }],
+      messages: [
+        ...history.flatMap(({ user, bot }) => [
+          { role: 'user', content: user },
+          { role: 'assistant', content: bot },
+        ]),
+        { role: 'user', content: message },
+      ],
     });
 
     const aiResponse = completion.choices[0].message.content;
-    res.json({ answer: aiResponse, source: 'openai' });
+    res.json({
+      reply: aiResponse,
+      source: 'openai',
+      history: [...history, { user: message, bot: aiResponse }],
+    });
   } catch (err) {
     console.error('Error con OpenAI:', err);
     res.status(500).json({ error: 'Error al procesar la respuesta con IA' });
   }
 });
 
-// Iniciar el servidor
 app.listen(port, () => {
   console.log(`✅ Servidor corriendo en puerto ${port}`);
 });
