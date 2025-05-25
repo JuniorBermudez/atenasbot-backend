@@ -7,6 +7,7 @@ import fs from 'fs';
 import stringSimilarity from 'string-similarity';
 
 dotenv.config();
+console.log('🔑 Clave de API leída del .env:', process.env.OPENAI_API_KEY);
 
 const app = express();
 const port = process.env.PORT || 3000;
