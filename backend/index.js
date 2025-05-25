@@ -1,84 +1,75 @@
 import express from 'express';
 import cors from 'cors';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 import OpenAI from 'openai';
 import fs from 'fs';
-import path from 'path';
 import stringSimilarity from 'string-similarity';
 
 dotenv.config();
 
 const app = express();
+const port = process.env.PORT || 3000;
 
-const allowedOrigins = [
-  'https://atenasbot-frontend-40c0r3cn5-juniorbermudezs-projects.vercel.app'
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('No permitido por CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true
-};
-
-app.use(cors(corsOptions));
+// Middleware
+app.use(cors());
 app.use(express.json());
 
+// Inicializar OpenAI
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-const faqsPath = path.resolve('./faqs.json');
-const faqs = JSON.parse(fs.readFileSync(faqsPath, 'utf-8'));
+// Leer FAQs desde archivo
+let faqs = [];
+try {
+  const data = fs.readFileSync('./faqs.json', 'utf8');
+  faqs = JSON.parse(data);
+} catch (err) {
+  console.error('Error al leer faqs.json:', err);
+}
 
-app.post('/api/chat', async (req, res) => {
-  const { message, history = [] } = req.body;
+// Endpoint raíz
+app.get('/', (req, res) => {
+  res.send('🧠 AtenasBot backend está en línea');
+});
 
-  const preguntas = faqs.map((f) => f.pregunta);
-  const { bestMatch } = stringSimilarity.findBestMatch(message, preguntas);
+// Endpoint para obtener las FAQs
+app.get('/faqs', (req, res) => {
+  res.json(faqs);
+});
 
-  if (bestMatch.rating > 0.7) {
-    const respuestaFAQ = faqs.find((f) => f.pregunta === bestMatch.target).respuesta;
-    return res.json({
-      reply: respuestaFAQ,
-      history: [...history, { role: 'user', content: message }, { role: 'assistant', content: respuestaFAQ }],
-    });
+// Endpoint principal para recibir preguntas del usuario
+app.post('/ask', async (req, res) => {
+  const { question } = req.body;
+  if (!question) return res.status(400).json({ error: 'Pregunta no recibida' });
+
+  // Intentar responder desde las FAQs
+  const questions = faqs.map((faq) => faq.pregunta);
+  const matches = stringSimilarity.findBestMatch(question, questions);
+  const bestMatch = matches.bestMatch;
+
+  // Si la coincidencia es buena, respondemos con la FAQ
+  if (bestMatch.rating > 0.6) {
+    const respuesta = faqs.find((faq) => faq.pregunta === bestMatch.target)?.respuesta;
+    return res.json({ answer: respuesta, source: 'faq' });
   }
 
-  const messages = [
-    {
-      role: 'system',
-      content:
-        'Eres un asistente de soporte técnico universitario llamado AtenasBot. Eres preciso, útil, amigable y conoces todos los sistemas universitarios.',
-    },
-    ...history,
-    { role: 'user', content: message },
-  ];
-
+  // Si no, preguntar a OpenAI
   try {
-    const chatResponse = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages,
-      temperature: 0.6,
-      max_tokens: 500,
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: question }],
     });
 
-    const reply = chatResponse.choices[0].message.content;
-    res.json({
-      reply,
-      history: [...history, { role: 'user', content: message }, { role: 'assistant', content: reply }],
-    });
-  } catch (error) {
-    console.error('Error en OpenAI:', error);
-    res.status(500).json({ reply: 'Error al contactar con el servidor.' });
+    const aiResponse = completion.choices[0].message.content;
+    res.json({ answer: aiResponse, source: 'openai' });
+  } catch (err) {
+    console.error('Error con OpenAI:', err);
+    res.status(500).json({ error: 'Error al procesar la respuesta con IA' });
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
+// Iniciar el servidor
+app.listen(port, () => {
+  console.log(`✅ Servidor corriendo en puerto ${port}`);
+});
