@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
-import { Configuration, OpenAIApi } from 'openai';
+import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import stringSimilarity from 'string-similarity';
@@ -10,14 +10,12 @@ dotenv.config();
 
 const app = express();
 
-// Dominios permitidos para CORS
 const allowedOrigins = [
   'https://atenasbot-frontend-40c0r3cn5-juniorbermudezs-projects.vercel.app'
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Permitir solicitudes sin origen (como Postman) o que estén en la lista
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -32,12 +30,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-const openai = new OpenAIApi(
-  new Configuration({ apiKey: process.env.OPENAI_API_KEY })
-);
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 const faqsPath = path.resolve('./faqs.json');
-const faqs = JSON.parse(fs.readFileSync(faqsPath));
+const faqs = JSON.parse(fs.readFileSync(faqsPath, 'utf-8'));
 
 app.post('/api/chat', async (req, res) => {
   const { message, history = [] } = req.body;
@@ -64,21 +62,23 @@ app.post('/api/chat', async (req, res) => {
   ];
 
   try {
-    const chatResponse = await openai.createChatCompletion({
+    const chatResponse = await openai.chat.completions.create({
       model: 'gpt-4',
       messages,
       temperature: 0.6,
       max_tokens: 500,
     });
 
-    const reply = chatResponse.data.choices[0].message.content;
+    const reply = chatResponse.choices[0].message.content;
     res.json({
       reply,
       history: [...history, { role: 'user', content: message }, { role: 'assistant', content: reply }],
     });
   } catch (error) {
+    console.error('Error en OpenAI:', error);
     res.status(500).json({ reply: 'Error al contactar con el servidor.' });
   }
 });
 
-app.listen(3001, () => console.log('Servidor en puerto 3001'));
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
