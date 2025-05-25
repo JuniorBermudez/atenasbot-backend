@@ -39,7 +39,7 @@ app.get('/faqs', (req, res) => {
 });
 
 // Endpoint principal para recibir preguntas del usuario
-app.post('/ask', async (req, res) => {
+app.post('/api/chat', async (req, res) => {
   const { question } = req.body;
   if (!question) return res.status(400).json({ error: 'Pregunta no recibida' });
 
